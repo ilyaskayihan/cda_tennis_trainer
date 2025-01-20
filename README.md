@@ -15,28 +15,6 @@ Die Hauptverzeichnisse und -dateien des Projekts sind wie folgt:
 - `requirements.txt` - Liste der benötigten Python-Pakete für die Ausführung des Projekts.
 - `README.md` - Diese Datei mit Informationen zum Projekt.
 
-## Installation
-
-1. Klonen Sie das Repository:
-   ```bash
-   git clone https://github.com/ilyaskayihan/cda_tennis_trainer.git
-   ```
-
-2. Wechseln Sie in das Projektverzeichnis:
-   ```bash
-   cd cda_tennis_trainer
-   ```
-
-3. Erstellen Sie eine virtuelle Umgebung und aktivieren Sie sie:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-4. Installieren Sie die erforderlichen Pakete:
-   ```bash
-   pip install -r requirements.txt
-   ```
 
 ## Nutzung
 

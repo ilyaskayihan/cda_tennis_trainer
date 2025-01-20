@@ -1,0 +1,126 @@
+Hier haben wir versucht unsere alten Module in Yolo mit ein zu implementieren, jedoch kam immer ein Fehlercode (siehe unten)
+
+
+import cv2
+from athlete_tracking import AthleteTracker
+from ball_tracking_system import BallTracker
+from court_line_analysis import CourtLineDetector
+from mini_court import MiniCourt
+import numpy as np
+import logging
+from ultralytics import YOLO
+
+# Konfiguration des Loggings
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def detect_objects(video_path, output_path, model_path='yolov8m.pt'):
+    logging.info("Lade das YOLO-Modell...")
+    model = YOLO(model_path)
+
+    cap = cv2.VideoCapture(video_path)
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_path, fourcc, fps, (frame_width, frame_height))
+
+    athlete_tracker = AthleteTracker()
+    ball_tracker = BallTracker()
+    court_detector = CourtLineDetector()
+    ret, frame = cap.read()
+    if not ret:
+        logging.error("Fehler beim Lesen des Videos.")
+        return
+    mini_court = MiniCourt(frame)
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # YOLO-Vorhersagen ausführen
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        results = model(frame, imgsz=1280)
+        logging.info(f'Verfügbare Klassen im Modell: {model.names}')
+        if 'sports ball' not in model.names.values():
+            logging.warning('Ball-Klasse nicht im Modell vorhanden. Eventuell wird der Ball nicht erkannt.')
+        hsv = cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+        lower_yellow = np.array([20, 100, 100])
+        upper_yellow = np.array([30, 255, 255])
+        mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+        contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        for contour in contours:
+            (x, y, w, h) = cv2.boundingRect(contour)
+            if w > 5 and h > 5:
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 2)
+        from bbox_utils import draw_bounding_boxes
+        for result in results:
+            for box in result.boxes.data.tolist():
+                if len(box) < 6:
+                    continue
+                x1, y1, x2, y2 = map(int, box[:4])
+                confidence = float(box[4])
+                class_id = int(box[5])
+                logging.info(f"Erkannt: Klasse={model.names[class_id]}, Konfidenz={confidence:.2f}")
+                if confidence > 0.01:
+                    if model.names[class_id] == 'person':
+                        color = (0, 255, 0)
+                    elif model.names[class_id] == 'sports ball':
+                        color = (0, 255, 255)
+                    else:
+                        color = (0, 0, 255)
+                    detections = [(x1, y1, x2-x1, y2-y1)]
+                    frame = draw_bounding_boxes(frame, detections)
+                    cv2.putText(frame, f"{model.names[class_id]} {confidence:.2f}", (x1, y1 - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+        player_detections = athlete_tracker.update(
+    [{'id': idx, 'x': bbox[0], 'y': bbox[1], 'w': bbox[2]-bbox[0], 'h': bbox[3]-bbox[1]}
+     for idx, bbox in enumerate(result.boxes.xyxy.tolist())]
+)
+        ball_detections = ball_tracker.update(
+    [{'x': bbox[0], 'y': bbox[1]} for bbox in result.boxes.xyxy.tolist()]
+)
+        court_lines = court_detector.detect_lines(frame)
+        frame = mini_court.draw_mini_court(frame)
+        cv2.imwrite(f'output/frame_{int(cap.get(cv2.CAP_PROP_POS_FRAMES))}.jpg', frame)
+        out.write(frame)
+
+    cap.release()
+    out.release()
+    logging.info("Objekterkennung abgeschlossen. Ausgabe gespeichert unter: %s", output_path)
+
+if __name__ == "__main__":
+    input_video = r'C:\\Users\\ilyas\\OneDrive\\Desktop\\cda2_versuch3000\\output\\processed_video.mp4'
+    output_video = r'C:\\Users\\ilyas\\OneDrive\\Desktop\\cda2_versuch3000\\output\\detected_video.mp4'
+    detect_objects(input_video, output_video)
+
+
+Fehlercode:
+
+2025-01-20 03:55:49,551 - INFO - Lade das YOLO-Modell...
+
+0: 736x1280 3 persons, 2 benchs, 1 sports ball, 1 clock, 1061.2ms
+Speed: 9.0ms preprocess, 1061.2ms inference, 2.0ms postprocess per image at shape (1, 3, 736, 1280)
+2025-01-20 03:55:52,236 - INFO - Verfügbare Klassen im Modell: {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane', 5: 'bus', 6: 'train', 7: 'truck', 8: 'boat', 9: 'traffic light', 10: 'fire hydrant', 11: 'stop sign', 12: 'parking meter', 13: 'bench', 14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse', 18: 'sheep', 19: 'cow', 20: 'elephant', 21: 'bear', 22: 'zebra', 23: 'giraffe', 24: 'backpack', 25: 'umbrella', 26: 'handbag', 27: 'tie', 28: 'suitcase', 29: 'frisbee', 30: 'skis', 31: 'snowboard', 32: 'sports ball', 33: 'kite', 34: 'baseball bat', 35: 'baseball glove', 36: 'skateboard', 37: 'surfboard', 38: 'tennis racket', 39: 'bottle', 40: 'wine glass', 41: 'cup', 42: 'fork', 43: 'knife', 44: 'spoon', 45: 'bowl', 46: 'banana', 47: 'apple', 48: 'sandwich', 49: 'orange', 50: 'broccoli', 51: 'carrot', 52: 'hot dog', 53: 'pizza', 54: 'donut', 55: 'cake', 56: 'chair', 57: 'couch', 58: 'potted plant', 59: 'bed', 60: 'dining table', 61: 'toilet', 62: 'tv', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster', 71: 'sink', 72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush'}
+2025-01-20 03:55:52,251 - INFO - Erkannt: Klasse=person, Konfidenz=0.93
+Traceback (most recent call last):
+  File "C:\Users\ilyas\OneDrive\Desktop\cda2_versuch3000\Video_Recognition\object_detection.py", line 96, in <module>
+    detect_objects(input_video, output_video)
+  File "C:\Users\ilyas\OneDrive\Desktop\cda2_versuch3000\Video_Recognition\object_detection.py", line 72, in detect_objects
+    frame = draw_bounding_boxes(frame, detections)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ilyas\OneDrive\Desktop\cda2_versuch3000\Video_Recognition\bbox_utils.py", line 27, in draw_bounding_boxes
+    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+cv2.error: OpenCV(4.10.0) :-1: error: (-5:Bad argument) in function 'rectangle'
+> Overload resolution failed:
+>  - Can't parse 'pt1'. Sequence item with index 0 has a wrong type
+>  - Can't parse 'pt1'. Sequence item with index 0 has a wrong type
+>  - Can't parse 'rec'. Expected sequence length 4, got 2
+>  - Can't parse 'rec'. Expected sequence length 4, got 2
+
+
+Process finished with exit code 1
+
+

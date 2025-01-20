@@ -1,6 +1,6 @@
 # CDA Tennis Trainer
 
-CDA Tennis Trainer ist ein Projekt zur Analyse und Verbesserung von Tennisspieltechniken mithilfe von Computer Vision und maschinellem Lernen.
+CDA Tennis Trainer ist ein Projekt zur Analyse von Tennisdaten und dient als eine Art Training.
 
 ## Projektstruktur
 
